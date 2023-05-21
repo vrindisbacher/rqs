@@ -13,6 +13,14 @@ The project is set up on the wonderful actix-web framework. The main entry point
 ## Running 
 Simply clone the repo and using your terminal run `cargo run`. 
 
+## Current Endpoints 
+
+- /queue/new: creates a new queue 
+- /queue/list: lists all queues 
+- /message/new: adds a message to a specified queue 
+- /message/get: gets a message 
+- /message/delete: deletes a message from a queue 
+
 ## Example 
 Here is some python that loosely sends and receives messages using all current features. 
 
