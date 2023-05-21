@@ -67,7 +67,7 @@ def main():
     list_queues()
 
     for i in range(100):
-        publish(queue_id, f"Message to Emily {i}", json.dumps({"Emily": "Is a Nerd"}))
+        publish(queue_id, f"Message to You {i}", json.dumps({"Hello": "World"}))
         consume_and_delete(queue_id)
 
 if __name__ == '__main__':
