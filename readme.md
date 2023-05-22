@@ -135,8 +135,8 @@ def consume_and_delete(queue_id):
     response = r.json()
     print(f"received {len(response['data'])} message(s)")
     for message in response['data']:
-        print(f"{message['uuid']}")
         uuid = message['uuid']
+        print(f"{uuid}")
         post_data = {
             "queueId": queue_id, 
             "messageUuid": uuid 
@@ -202,8 +202,8 @@ def consume_and_delete(queue_id):
     response = r.json()
     print(f"received {len(response['data'])} message(s)")
     for message in response['data']:
-        print(f"{message['uuid']}")
         uuid = message['uuid']
+        print(f"{uuid}")
         post_data = {
             "queueId": queue_id, 
             "messageUuid": uuid 
