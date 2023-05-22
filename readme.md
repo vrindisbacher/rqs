@@ -8,8 +8,7 @@ The following repo implements a simple EDI service. The suggested flow is as fol
 4. Consumer(s) acknowledge message and remove them from a queue/queues. 
 
 ## Performance 
-This is only a toy implementation, but being Rust, it works at baremetal speed. Sending, 
-
+This is only a toy implementation, but being Rust, it works at baremetal speed.
 Receiving and Deleting `1000` messages, one at a time, using the Python implementation below takes a mere `2.2` seconds. 
 
 Receiving and Deleting `1000` messages in batches of `10` using the Python implementation below takes a mere `0.9` seconds - a dramatic performance increase over one at a time. 
