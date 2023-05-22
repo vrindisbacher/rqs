@@ -10,15 +10,13 @@ The following repo implements a simple EDI service. The suggested flow is as fol
 ## Performance 
 This is only a toy implementation, but being Rust, it works at baremetal speed. Sending, 
 
-Receiving and Deleting `1000` messages at a time using the Python implementation below takes a mere `2.2` seconds. 
+Receiving and Deleting `1000` messages, one at a time, using the Python implementation below takes a mere `2.2` seconds. 
 
 Receiving and Deleting `1000` messages in batches of `10` using the Python implementation below takes a mere `0.9` seconds - a dramatic performance increase over one at a time. 
 
-Of course - network cost should absolutely be taken into account. These were done on local host, not on a remote server. 
+Of course - network cost should absolutely be taken into account. These were done on localhost, not on a remote server. 
 
 There are many improvements that could be made. For example, web sockets could be used for consumer connections to avoid more than a single request.
-
-The limitation of requests will be important when authentication is added as checking credentials in each request is undoubtedly expensive. 
 
 ## Development 
 The project is set up on the wonderful actix-web framework. The main entry point is in `src/main.rs`. `*_api.rs` implement the respective endpoints for a service. For example, `message_api.rs` implements all the endpoints for `message` specific actions. 
@@ -102,6 +100,7 @@ Simply clone the repo and using your terminal run `cargo run`.
 ## Example 
 Here is some python that loosely sends and receives messages with a queue configured with a read timeout of 10 seconds, and a batch size of 10. 
 
+### Sending and Receiving in Batch 
 In this case, the code will produce 10 messages until it hits 1000. It will then get 
 10 messages at a time, and delete each one until it hits 1000. 
 
@@ -169,6 +168,7 @@ if __name__ == '__main__':
     main()
 ```
 
+### Sending and Receiving One at a Time
 Here is an example of sending and receiving one message at a time. 
 
 ```python 
