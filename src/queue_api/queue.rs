@@ -10,7 +10,7 @@ pub struct Message {
 }
 
 impl Message {
-    pub fn new(id: String, content: String) -> Message {
+    pub fn new(id: String, content: String) -> Self {
         Message {
             id,
             content,
@@ -51,18 +51,20 @@ pub struct Queue {
     queue: Vec<Message>, // the actual queue
     read_timeout: u32,   // the amount of time a message is hidden from consumers
     size: u32,           // should always be the same as queue.len()
-    uuid: Uuid,
-    id: String,
+    uuid: Uuid,          // unique uuid
+    id: String,          // user id for queue - also unique
+    max_batch: u32,      // the max number of messages to insert and return at once
 }
 
 impl Queue {
-    pub fn new(id: String, read_timeout: u32) -> Queue {
+    pub fn new(id: String, read_timeout: u32, max_batch: u32) -> Self {
         Queue {
             queue: vec![],
             read_timeout,
             size: 0,
             uuid: Uuid::new_v4(),
             id,
+            max_batch,
         }
     }
 
@@ -82,17 +84,22 @@ impl Queue {
         uuid
     }
 
-    pub fn dispatch(&mut self) -> Option<&Message> {
+    pub fn dispatch(&mut self) -> Vec<&mut Message> {
         if self.size == 0 {
-            return None;
+            return vec![];
         }
+        let mut messages_to_dispatch = vec![];
         for message in self.queue.iter_mut() {
             if message.is_visible(self.read_timeout) {
+                // todo: change this to be after the vector is built?
                 message.last_read = Some(Utc::now());
-                return Some(message);
+                messages_to_dispatch.push(message);
+            }
+            if messages_to_dispatch.len() == self.max_batch as usize {
+                break;
             }
         }
-        None
+        messages_to_dispatch
     }
 
     pub fn rem_from_queue(&mut self, uuid: &String) -> Option<Message> {

@@ -21,11 +21,16 @@ pub async fn add_message(
         Some(q) => q,
     };
 
-    let message_id = post_data.message_id.to_owned();
-    let message_content = post_data.content.to_owned();
-    let new_message_uuid = queue.add_to_queue(message_id, message_content);
+    let messages_to_add = &post_data.messages;
+    let mut messages_to_send = vec![];
+    for message in messages_to_add.iter() {
+        let id = message.message_id.to_owned();
+        let content = message.content.to_owned();
+        let message_added = queue.add_to_queue(id, content);
+        messages_to_send.push(message_added);
+    }
 
-    HttpResponse::Accepted().json(JsonResponse::new(new_message_uuid, None::<String>))
+    HttpResponse::Accepted().json(JsonResponse::new(messages_to_send, None::<String>))
 }
 
 pub async fn delete_message(
@@ -74,11 +79,10 @@ pub async fn get_message(
         Some(q) => q,
     };
 
-    match queue.dispatch() {
-        None => HttpResponse::Accepted().json(JsonResponse::new(None::<String>, None::<String>)),
-        Some(m) => HttpResponse::Accepted().json(JsonResponse::new(
-            GetMessageResponse::new(m.get_id(), m.get_content(), m.get_uuid()),
-            None::<String>,
-        )),
-    }
+    let messages_to_send = queue
+        .dispatch()
+        .iter()
+        .map(|m| GetMessageResponse::new(m.get_id(), m.get_content(), m.get_uuid()))
+        .collect::<Vec<GetMessageResponse>>();
+    HttpResponse::Accepted().json(JsonResponse::new(messages_to_send, None::<String>))
 }

@@ -11,7 +11,26 @@ pub async fn new_queue(
     data: web::Data<AppState>,
     post_data: web::Json<NewQueueRequest>,
 ) -> HttpResponse {
-    let queue = Queue::new(post_data.queue_id.to_owned(), post_data.read_timeout);
+    if post_data.max_batch <= 0 {
+        return HttpResponse::BadRequest().json(JsonResponse::new(
+            None::<String>,
+            format!(
+                "The max number of messages to send and receive at once {} is invalid",
+                post_data.max_batch
+            ),
+        ));
+    }
+    if post_data.read_timeout <= 0 {
+        return HttpResponse::BadRequest().json(JsonResponse::new(
+            None::<String>,
+            format!("The read timeout {} is invalid", post_data.read_timeout),
+        ));
+    }
+    let queue = Queue::new(
+        post_data.queue_id.to_owned(),
+        post_data.read_timeout,
+        post_data.max_batch,
+    );
     let mut queues = data.get_queues().lock().await;
     let queue_uuid = &queue.get_uuid();
     match queues.entry(post_data.queue_id.to_owned()) {
