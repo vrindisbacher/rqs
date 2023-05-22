@@ -10,9 +10,15 @@ pub async fn add_message(
 ) -> HttpResponse {
     let queue_id = &post_data.queue_id;
 
-    let mut queue = match data.get_queue_by_id(queue_id).await {
-        Ok(q) => q,
-        Err(e) => return HttpResponse::BadRequest().json(JsonResponse::new(None::<String>, e)),
+    let mut queues = data.get_queues().lock().await;
+    let queue = match queues.get_mut(queue_id) {
+        None => {
+            return HttpResponse::BadRequest().json(JsonResponse::new(
+                None::<String>,
+                format!("No queue with id {} was found", queue_id),
+            ))
+        }
+        Some(q) => q,
     };
 
     let message_id = post_data.message_id.to_owned();
@@ -27,10 +33,15 @@ pub async fn delete_message(
     post_data: web::Json<DeleteMessageRequest>,
 ) -> HttpResponse {
     let queue_id = &post_data.queue_id;
-
-    let mut queue = match data.get_queue_by_id(queue_id).await {
-        Ok(q) => q,
-        Err(e) => return HttpResponse::BadRequest().json(JsonResponse::new(None::<String>, e)),
+    let mut queues = data.get_queues().lock().await;
+    let queue = match queues.get_mut(queue_id) {
+        None => {
+            return HttpResponse::BadRequest().json(JsonResponse::new(
+                None::<String>,
+                format!("No queue with id {} was found", queue_id),
+            ))
+        }
+        Some(q) => q,
     };
 
     let message_uuid = &post_data.message_uuid;
@@ -52,9 +63,15 @@ pub async fn get_message(
 ) -> HttpResponse {
     let queue_id = &query_data.queue_id;
 
-    let mut queue = match data.get_queue_by_id(queue_id).await {
-        Ok(q) => q,
-        Err(e) => return HttpResponse::BadRequest().json(JsonResponse::new(None::<String>, e)),
+    let mut queues = data.get_queues().lock().await;
+    let queue = match queues.get_mut(queue_id) {
+        None => {
+            return HttpResponse::BadRequest().json(JsonResponse::new(
+                None::<String>,
+                format!("No queue with id {} was found", queue_id),
+            ))
+        }
+        Some(q) => q,
     };
 
     match queue.dispatch() {

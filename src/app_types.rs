@@ -1,24 +1,15 @@
 use crate::queue_api::queue::Queue;
-use futures::lock::{MappedMutexGuard, Mutex, MutexGuard};
+use futures::lock::Mutex;
 use serde::Serialize;
+use std::collections::HashMap;
 
 pub struct AppState {
-    pub queues: Mutex<Vec<Queue>>,
+    pub queues: Mutex<HashMap<String, Queue>>,
 }
 
 impl AppState {
-    pub fn get_queues(&self) -> &Mutex<Vec<Queue>> {
+    pub fn get_queues(&self) -> &Mutex<HashMap<String, Queue>> {
         &self.queues
-    }
-    pub async fn get_queue_by_id(
-        &self,
-        queue_id: &String,
-    ) -> Result<MappedMutexGuard<Vec<Queue>, Queue>, String> {
-        let mut queues = self.get_queues().lock().await;
-        match queues.iter_mut().position(|q| q.get_id() == *queue_id) {
-            None => Err(format!("Could not find queue with id {}", queue_id)),
-            Some(p) => Ok(MutexGuard::map(queues, |q| &mut q[p])),
-        }
     }
 }
 
