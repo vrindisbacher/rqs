@@ -8,11 +8,15 @@ The following repo implements a simple EDI service. The suggested flow is as fol
 4. Consumer(s) acknowledge message and remove them from a queue/queues. 
 
 ## Performance 
-This is only a toy implementation, but being Rust, it works at baremetal speed. Sending, Receiving and Deleting 1000 messages using the Python implementation below takes a mere `2.2` seconds. 
+This is only a toy implementation, but being Rust, it works at baremetal speed. Sending, 
 
-There are many improvements that could be made. Here are a few: 
-- Enable batch sends / returns to limit the # of requests and responses 
-- Use web sockets for consumer connections to avoid more than a single request 
+Receiving and Deleting `1000` messages at a time using the Python implementation below takes a mere `2.2` seconds. 
+
+Receiving and Deleting `1000` messages in batches of `10` using the Python implementation below takes a mere `0.9` seconds - a dramatic performance increase over one at a time. 
+
+Of course - network cost should absolutely be taken into account. These were done on local host, not on a remote server. 
+
+There are many improvements that could be made. For example, web sockets could be used for consumer connections to avoid more than a single request.
 
 The limitation of requests will be important when authentication is added as checking credentials in each request is undoubtedly expensive. 
 
@@ -28,7 +32,8 @@ Simply clone the repo and using your terminal run `cargo run`.
    - Request Body
     ```json 
     {
-        "readTimeout": number, 
+        "readTimeout": number - how many seconds to hide message after reading, 
+        "maxBatch": number - how many messages can be sent to a consumer at once 
         "queueId": string
     }
     ```
@@ -47,23 +52,25 @@ Simply clone the repo and using your terminal run `cargo run`.
         "error": an error if any 
     }
     ```
-- POST `/message/new`: adds a message to a specified queue 
+- POST `/message/new`: adds messages to a specified queue 
     - Request Body 
     ```json 
     {
-        queueId: string, 
-        messageId: string,
-        content: string 
+        "queueId": string, 
+        "messages": {
+            messageId: string,
+            content: string 
+        }[]
     }
     ```
     - Response 
     ```json 
     {
-        "data": string representing the new messages uuid,
+        "data": string representing the new message uuids - note you can't do anything with these,
         "error": an error if any 
     }
     ```
-- GET `/message/get`: gets a message 
+- GET `/message/get`: gets a batch of messages - capped at `maxBatch` or the number of message available
     - Response 
     ```json 
     {
@@ -71,7 +78,7 @@ Simply clone the repo and using your terminal run `cargo run`.
                 "messageId": string,
                 "content": string,
                 "uuid": string
-            },
+            }[],
         "error": an eror if any 
     }
     ```
@@ -93,26 +100,29 @@ Simply clone the repo and using your terminal run `cargo run`.
     **NOTE: Messages can only be deleted from the queue while their read timeout is in effect. Otherwise, they must be read again and deleted within their read timeout.**
 
 ## Example 
-Here is some python that loosely sends and receives messages using all current features. 
+Here is some python that loosely sends and receives messages with a queue configured with a read timeout of 10 seconds, and a batch size of 10. 
+
+In this case, the code will produce 10 messages until it hits 1000. It will then get 
+10 messages at a time, and delete each one until it hits 1000. 
 
 ```python 
 import requests 
 import json 
+import datetime 
 
-def create_queue(queue_id):
-    requests.post("http://127.0.0.1:8080/queue/new", json={"readTimeout": 10, "queueId": queue_id})
+def create_queue(queue_id, read_timeout, max_batch):
+    requests.post("http://127.0.0.1:8080/queue/new", json={"readTimeout": read_timeout, "maxBatch": max_batch, "queueId": queue_id})
 
 def list_queues():
     requests.get("http://127.0.0.1:8080/queue/list")
 
-def publish(queue_id, message_id, message_content):
+def publish(queue_id, messages):
     post_data = {
         "queueId": queue_id,
-        "messageId": message_id,
-        "content": message_content
+        "messages": messages
     }
     r = requests.post("http://127.0.0.1:8080/message/new", json=post_data)
-    print(f"produced {r.json()}")
+    print(f"produced {r.json()['data']}")
 
 def delete_message(queue_id, message_uuid): 
     post_data = {
@@ -123,24 +133,103 @@ def delete_message(queue_id, message_uuid):
 
 def consume_and_delete(queue_id):
     r = requests.get(f"http://127.0.0.1:8080/message/get?queueId={queue_id}")
-    message = r.json()
-    print(f"received {message}")
-    uuid = message["data"]["uuid"]
-    post_data = {
-        "queueId": queue_id, 
-        "messageUuid": uuid 
-    }
-    r = requests.post("http://127.0.0.1:8080/message/delete", json=post_data)
+    response = r.json()
+    print(f"received {len(response['data'])} message(s)")
+    for message in response['data']:
+        print(f"{message['uuid']}")
+        uuid = message['uuid']
+        post_data = {
+            "queueId": queue_id, 
+            "messageUuid": uuid 
+        }
+        r = requests.post("http://127.0.0.1:8080/message/delete", json=post_data)
 
 def main(): 
+    start = datetime.datetime.now()
     queue_id = 'my-test-queue'
-    create_queue(queue_id)
+    create_queue(queue_id, 10, 10)
     list_queues()
 
     for i in range(100):
-        publish(queue_id, f"Message to You {i}", json.dumps({"Hello": "World"}))
+        to_publish = []
+        for j in range(10):
+            to_publish.append({
+                "messageId": f"Message {j} in batch {i}",
+                "content": json.dumps({"Hello" : "World"})
+            })
+        publish(queue_id, to_publish)
+
+    for i in range(100):
         consume_and_delete(queue_id)
+
+    print(datetime.datetime.now() - start)
+
 
 if __name__ == '__main__':
     main()
 ```
+
+Here is an example of sending and receiving one message at a time. 
+
+```python 
+import requests 
+import json 
+import datetime 
+
+def create_queue(queue_id, read_timeout, max_batch):
+    requests.post("http://127.0.0.1:8080/queue/new", json={"readTimeout": read_timeout, "maxBatch": max_batch, "queueId": queue_id})
+
+def list_queues():
+    requests.get("http://127.0.0.1:8080/queue/list")
+
+def publish(queue_id, messages):
+    post_data = {
+        "queueId": queue_id,
+        "messages": messages
+    }
+    r = requests.post("http://127.0.0.1:8080/message/new", json=post_data)
+    print(f"produced {r.json()['data']}")
+
+def delete_message(queue_id, message_uuid): 
+    post_data = {
+        "queueId": queue_id,
+        "messageUuid": message_uuid
+    }
+    requests.post("http://127.0.0.1:8080/message/new", json=post_data)
+
+def consume_and_delete(queue_id):
+    r = requests.get(f"http://127.0.0.1:8080/message/get?queueId={queue_id}")
+    response = r.json()
+    print(f"received {len(response['data'])} message(s)")
+    for message in response['data']:
+        print(f"{message['uuid']}")
+        uuid = message['uuid']
+        post_data = {
+            "queueId": queue_id, 
+            "messageUuid": uuid 
+        }
+        r = requests.post("http://127.0.0.1:8080/message/delete", json=post_data)
+
+def main(): 
+    start = datetime.datetime.now()
+    queue_id = 'my-test-queue'
+    create_queue(queue_id, 10, 10)
+    list_queues()
+
+    for i in range(1000):
+        to_publish = [{
+                "messageId": f"Message {i}",
+                "content": json.dumps({"Hello" : "World"})
+            }]
+        publish(queue_id, to_publish)
+        consume_and_delete(queue_id)
+
+    print(datetime.datetime.now() - start)
+
+
+if __name__ == '__main__':
+    main()
+```
+
+In this case, both the producer and consumer send and get 1 message at a time. If the consumer waited for multiple messages to be available, it could get up to 10 messages 
+at a time. 

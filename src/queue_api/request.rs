@@ -5,4 +5,5 @@ use serde::Deserialize;
 pub struct NewQueueRequest {
     pub read_timeout: u32,
     pub queue_id: String,
+    pub max_batch: u32, 
 }
