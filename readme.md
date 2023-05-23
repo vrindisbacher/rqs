@@ -1,8 +1,8 @@
 ## RQS (Rust Queueing Service) 
 
 The following repo implements a simple EDI service. There are multiple paradigms supported by the service: 
-1. One to One Messaging : Where one producer sends messages to one consumer.
-2. Worker Distribution : Where producer(s) send messages to a queue and multiple workers split up the work of processing messages. 
+1. One to One Messaging: Where one producer sends messages to one consumer.
+2. Worker Distribution: Where producer(s) send messages to a queue and multiple workers split up the work of processing messages. 
 3. One to Many Messaging: Where one producer sends a message to multiple consumers. 
 4. Many to Many Messaging: Where producers send messages to multiple consumers.
 
