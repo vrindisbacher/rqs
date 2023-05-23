@@ -1,12 +1,14 @@
 use actix_web::{error, web, App, HttpResponse, HttpServer};
 use app_types::AppState;
+use exchange_api::{add_message_to_exchange, new_exchange, list_exchanges};
 use futures::lock::Mutex;
 use general_api::ping;
-use message_api::{add_message, delete_message, get_message};
+use message_api::{add_message_to_queue, delete_message, get_message};
 use queue_api::{list_queues, new_queue};
 use std::collections::HashMap;
 
 mod app_types;
+mod exchange_api;
 mod general_api;
 mod message_api;
 mod queue_api;
@@ -15,6 +17,7 @@ mod queue_api;
 async fn main() -> std::io::Result<()> {
     let queue_data = web::Data::new(AppState {
         queues: Mutex::new(HashMap::new()),
+        exchanges: Mutex::new(HashMap::new()),
     });
 
     HttpServer::new(move || {
@@ -40,9 +43,15 @@ async fn main() -> std::io::Result<()> {
             )
             .service(
                 web::scope("/message")
-                    .route("/new", web::post().to(add_message))
+                    .route("/new", web::post().to(add_message_to_queue))
                     .route("/get", web::get().to(get_message))
                     .route("/delete", web::post().to(delete_message)),
+            )
+            .service(
+                web::scope("/exchange")
+                    .route("/list", web::get().to(list_exchanges))
+                    .route("/new", web::post().to(new_exchange))
+                    .route("/add", web::post().to(add_message_to_exchange)),
             )
     })
     .bind(("127.0.0.1", 8080))?

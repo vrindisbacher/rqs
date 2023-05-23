@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "pyrqs"
+version = "0.1.0"
+description = "A Python SDK for rqs. Mostly used for testing, and will likely be moved into its own place."
+authors = ["vrindisbacher <vrindisbacher77@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.9,<=3.12"
+requests = "^2.31.0"
+black = "^23.3.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
