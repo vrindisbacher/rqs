@@ -4,7 +4,7 @@ use request::{DeleteMessageRequest, GetMessageRequest, GetMessageResponse, NewMe
 
 mod request;
 
-pub async fn add_message(
+pub async fn add_message_to_queue(
     data: web::Data<AppState>,
     post_data: web::Json<NewMessageRequest>,
 ) -> HttpResponse {
