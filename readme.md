@@ -1,4 +1,4 @@
-## Rust EDI 
+## RQS - Rust Queueing Service
 
 The following repo implements a simple EDI service. The suggested flow is as follows:
 
