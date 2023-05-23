@@ -323,7 +323,7 @@ class Exchange:
             raise ErrorResponse(f"failed to list exchanges. Response was {r.json()}")
         return SuccessResponse(r.json())
 
-    def produce(self, messages: list[Message]):
+    def produce(self, messages: "list[Message]"):
         """
         produce(messages: list[Message])
 
@@ -344,7 +344,5 @@ class Exchange:
             json={"messages": messages, "exchangeId": self.exchange_id},
         )
         if r.status_code >= 400:
-            raise ErrorResponse(
-                f"failed to publish messages {self.message_id}, {self.content}. Response was {r.json()}"
-            )
+            raise ErrorResponse(f"failed to publish messages. Response was {r.json()}")
         return SuccessResponse(r.json())

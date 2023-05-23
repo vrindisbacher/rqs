@@ -35,7 +35,7 @@ def create_queue(base_url, queue_id, read_timeout, max_batch):
 
 def create_exchange(base_url, queues, exchange_id, exchange_type):
     exchange = Exchange(base_url, queues, exchange_id, exchange_type)
-    if exchange_id not in exchange.list().get_data():
+    if exchange_id not in map(lambda x: x["id"], exchange.list().get_data()):
         exchange.create()
     return exchange
 
@@ -55,7 +55,7 @@ def main():
     queue2 = create_queue(base_url, queue_id2, read_timeout, max_batch)
 
     # create a fanout exchange
-    exchange = Exchange(base_url, [queue1, queue2], exchange_id, exchange_type)
+    exchange = create_exchange(base_url, [queue1, queue2], exchange_id, exchange_type)
 
     # produce to the exchange - routing messsages to queue1
     message_id = queue1.queue_id
