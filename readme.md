@@ -1,4 +1,4 @@
-## RQS (Rust Queueing Service) 
+## RQS - Rust Queueing Service
 
 The following repo implements a simple EDI service. There are multiple paradigms supported by the service: 
 1. One to One Messaging: Where one producer sends messages to one consumer.
@@ -120,6 +120,64 @@ These components work together to facilitate reliable message delivery and proce
         "data": a string with the new exchange's uuid, 
         "error": an error if any 
     }
+    requests.post("http://127.0.0.1:8080/message/new", json=post_data)
+
+def consume_and_delete(queue_id):
+    r = requests.get(f"http://127.0.0.1:8080/message/get?queueId={queue_id}")
+    response = r.json()
+    print(f"received {len(response['data'])} message(s)")
+    for message in response['data']:
+        uuid = message['uuid']
+        print(f"{uuid}")
+        post_data = {
+            "queueId": queue_id, 
+            "messageUuid": uuid 
+        }
+        r = requests.post("http://127.0.0.1:8080/message/delete", json=post_data)
+
+def main(): 
+    start = datetime.datetime.now()
+    queue_id = 'my-test-queue'
+    create_queue(queue_id, 10, 10)
+    list_queues()
+
+    for i in range(100):
+        to_publish = []
+        for j in range(10):
+            to_publish.append({
+                "messageId": f"Message {j} in batch {i}",
+                "content": json.dumps({"Hello" : "World"})
+            })
+        publish(queue_id, to_publish)
+
+    for i in range(100):
+        consume_and_delete(queue_id)
+
+    print(datetime.datetime.now() - start)
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### Sending and Receiving One at a Time
+Here is an example of sending and receiving one message at a time. 
+
+```python 
+import requests 
+import json 
+import datetime 
+
+def create_queue(queue_id, read_timeout, max_batch):
+    requests.post("http://127.0.0.1:8080/queue/new", json={"readTimeout": read_timeout, "maxBatch": max_batch, "queueId": queue_id})
+
+def list_queues():
+    requests.get("http://127.0.0.1:8080/queue/list")
+
+def publish(queue_id, messages):
+    post_data = {
+        "queueId": queue_id,
+        "messages": messages
     ```
 - GET `/exchange/list`: lists all exchanges 
     - Response
