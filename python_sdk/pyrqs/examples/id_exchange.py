@@ -1,3 +1,4 @@
+import datetime
 from pyrqs.core import Queue, Message, MessageHandler, Exchange, ID
 
 
@@ -41,6 +42,7 @@ def create_exchange(base_url, queues, exchange_id, exchange_type):
 
 
 def main():
+    start = datetime.datetime.now()
     base_url = "http://127.0.0.1:8080"
     queue_id1 = "my-bound-queue-1"
     queue_id2 = "my-bound-queue-2"
@@ -66,6 +68,7 @@ def main():
     message_handler2 = MessageHandler(base_url, queue2)
     consume(message_handler1)
     consume(message_handler2)
+    print(datetime.datetime.now() - start)
 
 
 if __name__ == "__main__":

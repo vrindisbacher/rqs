@@ -1,3 +1,4 @@
+import datetime
 from pyrqs.core import Queue, Message, MessageHandler
 
 
@@ -31,6 +32,7 @@ def create_queue(base_url, queue_id, read_timeout, max_batch):
 
 
 def main():
+    start = datetime.datetime.now()
     base_url = "http://127.0.0.1:8080"
     queue_id = "my-queue"
     read_timeout = 10
@@ -43,6 +45,7 @@ def main():
     message_handler = MessageHandler(base_url, queue)
     produce(message_handler)
     consume(message_handler)
+    print(datetime.datetime.now() - start)
 
 
 if __name__ == "__main__":

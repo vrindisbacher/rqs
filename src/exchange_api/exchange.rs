@@ -14,7 +14,7 @@ impl NoMatchingQueueError {
         NoMatchingQueueError { id_failed_to_match }
     }
 
-    pub fn to_string(&self) -> String { 
+    pub fn to_string(&self) -> String {
         format!("Queue with id {} was not found", self.id_failed_to_match)
     }
 }
@@ -63,6 +63,7 @@ impl Exchange {
         content: String,
         app_data: &web::Data<AppState>,
     ) -> Result<Vec<String>, NoMatchingQueueError> {
+        let cipher = app_data.get_cipher().lock().await;
         for queue_id in self.queue_ids.iter() {
             // messages are sent to queues with same id as message id
             if *queue_id == id {
@@ -73,7 +74,7 @@ impl Exchange {
                     }
                     Some(q) => q,
                 };
-                let message = queue.add_to_queue(id, content);
+                let message = queue.add_to_queue(&cipher, id, content);
                 return Ok(vec![message]);
             }
         }
@@ -87,6 +88,7 @@ impl Exchange {
         app_data: &web::Data<AppState>,
     ) -> Result<Vec<String>, NoMatchingQueueError> {
         let mut messages_produced = vec![];
+        let cipher = app_data.get_cipher().lock().await;
         for queue_id in self.queue_ids.iter() {
             let mut queues = app_data.get_queues().lock().await;
             let queue = match queues.get_mut(queue_id) {
@@ -95,7 +97,7 @@ impl Exchange {
                 }
                 Some(q) => q,
             };
-            let message = queue.add_to_queue(id.to_owned(), content.to_owned());
+            let message = queue.add_to_queue(&cipher, id.to_owned(), content.to_owned());
             messages_produced.push(message);
         }
         Ok(messages_produced)

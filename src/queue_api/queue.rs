@@ -1,34 +1,43 @@
+use aes_gcm::aead::Aead;
+use aes_gcm::aes::Aes256;
+use aes_gcm::AesGcm;
 use chrono::{DateTime, Duration, Utc};
+use futures::lock::MutexGuard;
 use uuid::Uuid;
+
+use aes_gcm::aes::cipher::typenum::bit::{B0, B1};
+use aes_gcm::aes::cipher::typenum::{UInt, UTerm};
+use aes_gcm::{
+    aead::{generic_array::GenericArray, AeadCore, OsRng},
+    Aes256Gcm,
+};
 
 #[derive(Debug)]
 pub struct Message {
     id: String,
-    content: String,
+    content: Vec<u8>,
     last_read: Option<DateTime<Utc>>,
     uuid: Uuid,
+    nonce: GenericArray<u8, UInt<UInt<UInt<UInt<UTerm, B1>, B1>, B0>, B0>>,
 }
 
 impl Message {
-    pub fn new(id: String, content: String) -> Self {
+    pub fn new(
+        id: String,
+        content: Vec<u8>,
+        nonce: GenericArray<u8, UInt<UInt<UInt<UInt<UTerm, B1>, B1>, B0>, B0>>,
+    ) -> Self {
         Message {
             id,
             content,
             last_read: None,
             uuid: Uuid::new_v4(),
+            nonce,
         }
     }
 
     pub fn get_uuid(&self) -> String {
         self.uuid.to_string()
-    }
-
-    pub fn get_id(&self) -> String {
-        (*self.id).to_owned()
-    }
-
-    pub fn get_content(&self) -> String {
-        (*self.content).to_owned()
     }
 
     pub fn uuid_matches(&self, uuid: &String) -> bool {
@@ -43,6 +52,29 @@ impl Message {
                 now - dt > Duration::seconds(read_timeout as i64)
             }
         }
+    }
+}
+
+pub struct DecryptedMessage {
+    id: String,
+    content: String,
+    uuid: Uuid,
+}
+
+impl DecryptedMessage {
+    pub fn new(id: String, content: String, uuid: Uuid) -> Self {
+        DecryptedMessage { id, content, uuid }
+    }
+    pub fn get_uuid(&self) -> String {
+        self.uuid.to_string()
+    }
+
+    pub fn get_id(&self) -> String {
+        (*self.id).to_owned()
+    }
+
+    pub fn get_content(&self) -> String {
+        (*self.content).to_owned()
     }
 }
 
@@ -76,24 +108,41 @@ impl Queue {
         self.id.to_owned()
     }
 
-    pub fn add_to_queue(&mut self, id: String, content: String) -> String {
-        let message = Message::new(id, content);
+    pub fn add_to_queue(
+        &mut self,
+        cipher: &MutexGuard<AesGcm<Aes256, UInt<UInt<UInt<UInt<UTerm, B1>, B1>, B0>, B0>>>,
+        id: String,
+        content: String,
+    ) -> String {
+        let nonce = Aes256Gcm::generate_nonce(&mut OsRng); // 96-bits; unique per message
+        let ciphered_content = cipher.encrypt(&nonce, content.as_ref()).unwrap();
+        let message = Message::new(id, ciphered_content, nonce);
         let uuid = message.get_uuid();
         self.queue.push(message);
         self.incr_size();
         uuid
     }
 
-    pub fn dispatch(&mut self) -> Vec<&mut Message> {
+    pub fn dispatch(
+        &mut self,
+        cipher: MutexGuard<AesGcm<Aes256, UInt<UInt<UInt<UInt<UTerm, B1>, B1>, B0>, B0>>>,
+    ) -> Vec<DecryptedMessage> {
         if self.size == 0 {
             return vec![];
         }
         let mut messages_to_dispatch = vec![];
         for message in self.queue.iter_mut() {
             if message.is_visible(self.read_timeout) {
-                // todo: change this to be after the vector is built?
+                // uncipher the message
+                let unciphered_content = cipher
+                    .decrypt(&message.nonce, message.content.as_ref())
+                    .unwrap();
+                let content = String::from_utf8(unciphered_content).unwrap();
+
+                let decrypted_message =
+                    DecryptedMessage::new(message.id.clone(), content, message.uuid);
                 message.last_read = Some(Utc::now());
-                messages_to_dispatch.push(message);
+                messages_to_dispatch.push(decrypted_message);
             }
             if messages_to_dispatch.len() == self.max_batch as usize {
                 break;

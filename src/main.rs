@@ -1,6 +1,10 @@
 use actix_web::{error, web, App, HttpResponse, HttpServer};
+use aes_gcm::{
+    aead::{KeyInit, OsRng},
+    Aes256Gcm,
+};
 use app_types::AppState;
-use exchange_api::{add_message_to_exchange, new_exchange, list_exchanges};
+use exchange_api::{add_message_to_exchange, list_exchanges, new_exchange};
 use futures::lock::Mutex;
 use general_api::ping;
 use message_api::{add_message_to_queue, delete_message, get_message};
@@ -15,9 +19,14 @@ mod queue_api;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    // generate unique key on start up
+    let key = Aes256Gcm::generate_key(&mut OsRng);
+    let cipher = Aes256Gcm::new(&key);
+
     let queue_data = web::Data::new(AppState {
         queues: Mutex::new(HashMap::new()),
         exchanges: Mutex::new(HashMap::new()),
+        cipher: Mutex::new(cipher),
     });
 
     HttpServer::new(move || {
