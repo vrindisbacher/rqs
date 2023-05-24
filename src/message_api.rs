@@ -21,12 +21,22 @@ pub async fn add_message_to_queue(
         Some(q) => q,
     };
 
+    let cipher = data.get_cipher().lock().await;
+
     let messages_to_add = &post_data.messages;
     let mut messages_to_send = vec![];
     for message in messages_to_add.iter() {
         let id = message.message_id.to_owned();
         let content = message.content.to_owned();
-        let message_added = queue.add_to_queue(id, content);
+        let message_added = match queue.add_to_queue(&cipher, id, content) {
+            Ok(s) => s,
+            Err(_) => {
+                return HttpResponse::InternalServerError().json(JsonResponse::new(
+                    None::<String>,
+                    "Something went wrong. Please try again.",
+                ))
+            }
+        };
         messages_to_send.push(message_added);
     }
 
@@ -79,10 +89,18 @@ pub async fn get_message(
         Some(q) => q,
     };
 
-    let messages_to_send = queue
-        .dispatch()
-        .iter()
-        .map(|m| GetMessageResponse::new(m.get_id(), m.get_content(), m.get_uuid()))
-        .collect::<Vec<GetMessageResponse>>();
+    let cipher = data.get_cipher().lock().await;
+    let messages_to_send = match queue.dispatch(cipher) {
+        Ok(m) => m,
+        Err(_) => {
+            return HttpResponse::InternalServerError().json(JsonResponse::new(
+                None::<String>,
+                "Something went wrong. Please try again.",
+            ))
+        }
+    }
+    .iter()
+    .map(|m| GetMessageResponse::new(m.get_id(), m.get_content(), m.get_uuid()))
+    .collect::<Vec<GetMessageResponse>>();
     HttpResponse::Accepted().json(JsonResponse::new(messages_to_send, None::<String>))
 }

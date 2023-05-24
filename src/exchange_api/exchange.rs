@@ -4,18 +4,21 @@ use uuid::Uuid;
 
 use crate::app_types::AppState;
 
-#[derive(Debug)]
-pub struct NoMatchingQueueError {
-    id_failed_to_match: String,
+pub enum ExchangeToQueueError {
+    NoMatchingQueueError(String),
+    UnableToAddError,
 }
 
-impl NoMatchingQueueError {
-    fn new(id_failed_to_match: String) -> Self {
-        NoMatchingQueueError { id_failed_to_match }
-    }
-
-    pub fn to_string(&self) -> String { 
-        format!("Queue with id {} was not found", self.id_failed_to_match)
+impl ExchangeToQueueError {
+    pub fn to_string(&self) -> String {
+        match self {
+            ExchangeToQueueError::NoMatchingQueueError(s) => {
+                format!("No queue with id {} was found", s)
+            }
+            ExchangeToQueueError::UnableToAddError => {
+                String::from("Something went wrong. Please try again.")
+            }
+        }
     }
 }
 
@@ -50,7 +53,7 @@ impl Exchange {
         id: String,
         content: String,
         app_data: &web::Data<AppState>,
-    ) -> Result<Vec<String>, NoMatchingQueueError> {
+    ) -> Result<Vec<String>, ExchangeToQueueError> {
         match self.exchange_type {
             ExchangeType::ID => self.id_dispatch(id, content, app_data).await,
             ExchangeType::FANOUT => self.fanout_dispatch(id, content, app_data).await,
@@ -62,22 +65,28 @@ impl Exchange {
         id: String,
         content: String,
         app_data: &web::Data<AppState>,
-    ) -> Result<Vec<String>, NoMatchingQueueError> {
+    ) -> Result<Vec<String>, ExchangeToQueueError> {
+        let cipher = app_data.get_cipher().lock().await;
         for queue_id in self.queue_ids.iter() {
             // messages are sent to queues with same id as message id
             if *queue_id == id {
                 let mut queues = app_data.get_queues().lock().await;
                 let queue: &mut crate::queue_api::queue::Queue = match queues.get_mut(queue_id) {
                     None => {
-                        return Err(NoMatchingQueueError::new(queue_id.to_owned()));
+                        return Err(ExchangeToQueueError::NoMatchingQueueError(
+                            queue_id.to_owned(),
+                        ));
                     }
                     Some(q) => q,
                 };
-                let message = queue.add_to_queue(id, content);
-                return Ok(vec![message]);
+                let message = queue.add_to_queue(&cipher, id, content);
+                match message {
+                    Ok(m) => return Ok(vec![m]),
+                    Err(_) => return Err(ExchangeToQueueError::UnableToAddError),
+                }
             }
         }
-        Err(NoMatchingQueueError::new(id))
+        return Err(ExchangeToQueueError::NoMatchingQueueError(id));
     }
 
     async fn fanout_dispatch(
@@ -85,17 +94,23 @@ impl Exchange {
         id: String,
         content: String,
         app_data: &web::Data<AppState>,
-    ) -> Result<Vec<String>, NoMatchingQueueError> {
+    ) -> Result<Vec<String>, ExchangeToQueueError> {
         let mut messages_produced = vec![];
+        let cipher = app_data.get_cipher().lock().await;
         for queue_id in self.queue_ids.iter() {
             let mut queues = app_data.get_queues().lock().await;
             let queue = match queues.get_mut(queue_id) {
                 None => {
-                    return Err(NoMatchingQueueError::new(queue_id.to_owned()));
+                    return Err(ExchangeToQueueError::NoMatchingQueueError(
+                        queue_id.to_owned(),
+                    ));
                 }
                 Some(q) => q,
             };
-            let message = queue.add_to_queue(id.to_owned(), content.to_owned());
+            let message = match queue.add_to_queue(&cipher, id.to_owned(), content.to_owned()) {
+                Ok(m) => m,
+                Err(_) => return Err(ExchangeToQueueError::UnableToAddError),
+            };
             messages_produced.push(message);
         }
         Ok(messages_produced)
