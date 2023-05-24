@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use aes_gcm::aead::Aead;
 use aes_gcm::aes::Aes256;
 use aes_gcm::AesGcm;
@@ -11,6 +13,9 @@ use aes_gcm::{
     aead::{generic_array::GenericArray, AeadCore, OsRng},
     Aes256Gcm,
 };
+
+#[derive(Debug)]
+pub struct EncryptionError;
 
 #[derive(Debug)]
 pub struct Message {
@@ -113,31 +118,39 @@ impl Queue {
         cipher: &MutexGuard<AesGcm<Aes256, UInt<UInt<UInt<UInt<UTerm, B1>, B1>, B0>, B0>>>,
         id: String,
         content: String,
-    ) -> String {
+    ) -> Result<String, EncryptionError> {
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng); // 96-bits; unique per message
-        let ciphered_content = cipher.encrypt(&nonce, content.as_ref()).unwrap();
+        let ciphered_content = match cipher.encrypt(&nonce, content.as_ref()) {
+            Ok(s) => s,
+            Err(_) => return Err(EncryptionError),
+        };
         let message = Message::new(id, ciphered_content, nonce);
         let uuid = message.get_uuid();
         self.queue.push(message);
         self.incr_size();
-        uuid
+        Ok(uuid)
     }
 
     pub fn dispatch(
         &mut self,
         cipher: MutexGuard<AesGcm<Aes256, UInt<UInt<UInt<UInt<UTerm, B1>, B1>, B0>, B0>>>,
-    ) -> Vec<DecryptedMessage> {
+    ) -> Result<Vec<DecryptedMessage>, EncryptionError> {
         if self.size == 0 {
-            return vec![];
+            return Ok(vec![]);
         }
         let mut messages_to_dispatch = vec![];
         for message in self.queue.iter_mut() {
             if message.is_visible(self.read_timeout) {
                 // uncipher the message
-                let unciphered_content = cipher
-                    .decrypt(&message.nonce, message.content.as_ref())
-                    .unwrap();
-                let content = String::from_utf8(unciphered_content).unwrap();
+                let unciphered_content =
+                    match cipher.decrypt(&message.nonce, message.content.as_ref()) {
+                        Ok(s) => s,
+                        Err(_) => return Err(EncryptionError),
+                    };
+                let content = match String::from_utf8(unciphered_content) {
+                    Ok(s) => s,
+                    Err(_) => return Err(EncryptionError),
+                };
 
                 let decrypted_message =
                     DecryptedMessage::new(message.id.clone(), content, message.uuid);
@@ -148,7 +161,7 @@ impl Queue {
                 break;
             }
         }
-        messages_to_dispatch
+        Ok(messages_to_dispatch)
     }
 
     pub fn rem_from_queue(&mut self, uuid: &String) -> Option<Message> {

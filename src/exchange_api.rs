@@ -8,6 +8,8 @@ use crate::app_types::{AppState, JsonResponse};
 use exchange::{Exchange, ExchangeType};
 use request::ExchangeEntry;
 
+use self::exchange::ExchangeToQueueError;
+
 pub(crate) mod exchange;
 mod request;
 
@@ -85,10 +87,16 @@ pub async fn add_message_to_exchange(
         let message_added = exchange.dispatch(id, content, &data).await;
         match message_added {
             Ok(v) => messages_to_send.extend(v),
-            Err(e) => {
-                return HttpResponse::BadRequest()
-                    .json(JsonResponse::new(None::<String>, e.to_string()))
-            }
+            Err(e) => match e {
+                ExchangeToQueueError::NoMatchingQueueError(_) => {
+                    return HttpResponse::BadRequest()
+                        .json(JsonResponse::new(None::<String>, e.to_string()))
+                }
+                ExchangeToQueueError::UnableToAddError => {
+                    return HttpResponse::InternalServerError()
+                        .json(JsonResponse::new(None::<String>, e.to_string()))
+                }
+            },
         }
     }
 
