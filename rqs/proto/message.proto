@@ -1,0 +1,37 @@
+syntax = "proto3";
+package message; 
+
+service MessageService {
+	rpc new_message (NewMessageRequest) returns (NewMessageResponse);
+	rpc consume_message (ConsumeMessageRequest) returns (ConsumeMessageResponse);
+	rpc ack_message (AckMessageRequest) returns (AckMessageResponse); 
+}
+
+message NewMessageRequest {
+	string queue_id = 1;
+	string message_id = 2;
+	string message_content = 3;
+}
+
+message NewMessageResponse {
+	string data = 1;
+}
+
+message ConsumeMessageRequest {
+	string queue_id = 1; 
+}
+
+message ConsumeMessageResponse {
+	string message_uuid = 1;
+	string message_id = 2;
+	string message_content = 3;
+}
+
+message AckMessageRequest {
+	string queue_id = 1;
+	string message_uuid = 2; 
+}
+
+message AckMessageResponse {
+	string data = 1; 
+}

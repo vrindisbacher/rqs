@@ -1,0 +1,14 @@
+syntax = "proto3";
+package queue; 
+
+service QueueService {
+	rpc new_queue (NewQueueRequest) returns (NewQueueResponse);
+}
+
+message NewQueueRequest {
+	string queue_id = 1;
+}
+
+message NewQueueResponse {
+	string data = 1;
+}
