@@ -10,6 +10,7 @@ tonic-web = "0.10.2"
 tokio = { version = "*", features = ["rt-multi-thread", "macros"] }
 tonic = "0.10.2"
 prost = "0.12"
+serial_test = "2.0.0"
 
 [build-dependencies]
 tonic-build = "0.10"

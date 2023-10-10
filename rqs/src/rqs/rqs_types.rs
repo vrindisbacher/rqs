@@ -1,7 +1,4 @@
-use std::error::Error;
-
-
-
+#[derive(Debug)]
 pub enum RQSError {
     FailedToCreateQueue(String),
     FailedToDeleteQueue(String),
