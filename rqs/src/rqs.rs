@@ -5,12 +5,12 @@ use rqs_types::{RQSError, RQSEvent};
 use rqs_utils::exponential_backoff;
 
 mod rqs_queue;
-mod rqs_types;
+pub mod rqs_types;
 mod rqs_utils;
 
-static LOG_ROOT: &'static str = "tmp/log/";
-static EVENT_LOG: &'static str = "event.log";
-static QUEUE_LOG: &'static str = "queues/";
+pub static LOG_ROOT: &'static str = "tmp/log/";
+pub static EVENT_LOG: &'static str = "event.log";
+pub static QUEUE_LOG: &'static str = "queues/";
 
 #[derive(Debug, PartialEq)]
 pub struct RQS {
@@ -18,10 +18,16 @@ pub struct RQS {
 }
 
 impl RQS {
-    pub async fn new() -> Self {
-        let mut rqs = Self { queues: Vec::new() };
-        rqs.revive_from_log().await;
-        rqs
+    pub fn new() -> Self {
+        Self { queues: Vec::new() }
+    }
+
+    pub fn get_queues(&self) -> &Vec<RQSQueue> {
+        &self.queues
+    }
+
+    pub fn clear(&mut self) {
+        self.queues.clear();
     }
 
     pub async fn handle_event(&mut self, event: RQSEvent) -> Result<(), RQSError> {
@@ -33,7 +39,7 @@ impl RQS {
         Ok(())
     }
 
-    async fn revive_from_log(&mut self) {
+    pub async fn revive_from_log(&mut self) {
         if std::fs::metadata(format!("{LOG_ROOT}{EVENT_LOG}")).is_err() {
             return;
         }
@@ -132,7 +138,8 @@ mod rqs_test {
     #[serial]
     async fn test_revive() {
         delete_event_log();
-        let mut rqs = RQS::new().await;
+        let mut rqs = RQS::new();
+        rqs.revive_from_log().await;
         rqs.handle_event(RQSEvent::QueueCreated("queue_1".to_string()))
             .await
             .expect("Could not create queue_1");
@@ -143,7 +150,8 @@ mod rqs_test {
             .await
             .expect("Could not delete queue_1");
 
-        let rqs_from_revive = RQS::new().await;
+        let mut rqs_from_revive = RQS::new();
+        rqs_from_revive.revive_from_log().await;
         assert_eq!(rqs, rqs_from_revive);
     }
 
@@ -151,7 +159,8 @@ mod rqs_test {
     #[serial]
     async fn test_revive_and_add() {
         delete_event_log();
-        let mut rqs = RQS::new().await;
+        let mut rqs = RQS::new();
+        rqs.revive_from_log().await;
         rqs.handle_event(RQSEvent::QueueCreated("queue_1".to_string()))
             .await
             .expect("Could not create queue_1");
@@ -162,7 +171,8 @@ mod rqs_test {
             .await
             .expect("Could not delete queue_1");
 
-        let mut rqs_from_revive = RQS::new().await;
+        let mut rqs_from_revive = RQS::new();
+        rqs_from_revive.revive_from_log().await;
         rqs_from_revive
             .handle_event(RQSEvent::QueueCreated("queue_3".to_string()))
             .await
@@ -179,7 +189,8 @@ mod rqs_test {
     #[serial]
     async fn test_queue_already_exists() {
         delete_event_log();
-        let mut rqs = RQS::new().await;
+        let mut rqs = RQS::new();
+        rqs.revive_from_log().await;
         rqs.handle_event(RQSEvent::QueueCreated("queue_1".to_string()))
             .await
             .expect("Could not create queue_1");
@@ -193,7 +204,8 @@ mod rqs_test {
     #[serial]
     async fn test_queue_to_delete_does_not_exist() {
         delete_event_log();
-        let mut rqs = RQS::new().await;
+        let mut rqs = RQS::new();
+        rqs.revive_from_log().await;
         rqs.handle_event(RQSEvent::QueueCreated("queue_1".to_string()))
             .await
             .expect("Could not create queue_1");
