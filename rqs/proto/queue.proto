@@ -3,6 +3,7 @@ package queue;
 
 service QueueService {
 	rpc new_queue (NewQueueRequest) returns (NewQueueResponse);
+	rpc delete_queue (DeleteQueueRequest) returns (DeleteQueueResponse);
 }
 
 message NewQueueRequest {
@@ -10,5 +11,13 @@ message NewQueueRequest {
 }
 
 message NewQueueResponse {
+	string data = 1;
+}
+
+message DeleteQueueRequest {
+	string queue_id = 1; 
+}
+
+message DeleteQueueResponse {
 	string data = 1;
 }

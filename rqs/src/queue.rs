@@ -5,6 +5,8 @@ use tonic::{Request, Response, Status};
 use crate::rqs::rqs_types::RQSEvent;
 use crate::GLOBAL_DATA;
 
+use self::queue::{DeleteQueueRequest, DeleteQueueResponse};
+
 mod queue;
 
 #[derive(Debug, Default)]
@@ -38,6 +40,27 @@ impl QueueService for Queue {
         };
         Ok(Response::new(response))
     }
+
+    async fn delete_queue(
+        &self,
+        request: Request<DeleteQueueRequest>,
+    ) -> Result<Response<DeleteQueueResponse>, Status> {
+        let queue_name = request.into_inner().queue_id;
+        let response = match GLOBAL_DATA
+            .lock()
+            .await
+            .handle_event(RQSEvent::QueueDeleted(queue_name))
+            .await
+        {
+            Ok(_) => DeleteQueueResponse {
+                data: "Successfully deleted queue".to_string(),
+            },
+            Err(e) => DeleteQueueResponse {
+                data: format!("Failed to delete queue. Failed with error: {e}"),
+            },
+        };
+        Ok(Response::new(response))
+    }
 }
 
 #[cfg(test)]
@@ -56,10 +79,12 @@ mod queue_client_server_test {
     use serial_test::serial;
     use tonic::transport::Server;
 
+    use super::queue::DeleteQueueRequest;
+
     async fn start() {
         delete_event_log();
-        let mut rqs = GLOBAL_DATA.lock().await; 
-        rqs.clear(); 
+        let mut rqs = GLOBAL_DATA.lock().await;
+        rqs.clear();
         rqs.revive_from_log().await;
         spawn_server().await;
     }
@@ -108,8 +133,42 @@ mod queue_client_server_test {
         assert_eq!(queues, vec!["queue_1"]);
     }
 
-    #[tokio::test] 
-    #[serial] 
+    #[tokio::test]
+    #[serial]
+    async fn test_create_and_delete_queue_request() {
+        start().await;
+
+        let client_addr = "http://127.0.0.1:8080";
+        let mut client = QueueServiceClient::connect(client_addr)
+            .await
+            .expect("Could not create client");
+        let request = NewQueueRequest {
+            queue_id: "queue_1".to_string(),
+        };
+        client
+            .new_queue(request)
+            .await
+            .expect("Failed to create queue request");
+
+        let request = DeleteQueueRequest {
+            queue_id: "queue_1".to_string(),
+        };
+        client
+            .delete_queue(request)
+            .await
+            .expect("Failed to delete queue");
+
+        let rqs = GLOBAL_DATA.lock().await;
+        let queues = rqs
+            .get_queues()
+            .iter()
+            .map(|x| x.get_name())
+            .collect::<Vec<&String>>();
+        assert_eq!(queues, vec![] as Vec<&String>);
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn test_multiple_concurrent_queue_requests() {
         start().await;
         let client_addr = "http://127.0.0.1:8080";
@@ -122,9 +181,13 @@ mod queue_client_server_test {
         let request2 = NewQueueRequest {
             queue_id: "queue_2".to_string(),
         };
-        futures::future::join_all([client.clone().new_queue(request1), client.new_queue(request2)]).await;
+        futures::future::join_all([
+            client.clone().new_queue(request1),
+            client.new_queue(request2),
+        ])
+        .await;
 
-        // should have two queues 
+        // should have two queues
         let rqs = GLOBAL_DATA.lock().await;
         let queues = rqs
             .get_queues()
@@ -133,7 +196,7 @@ mod queue_client_server_test {
             .collect::<Vec<&String>>();
         assert_eq!(queues, vec!["queue_1", "queue_2"]);
 
-        // should also be able to revive the queues 
+        // should also be able to revive the queues
         let mut rqs = RQS::new();
         rqs.revive_from_log().await;
         let queues = rqs
