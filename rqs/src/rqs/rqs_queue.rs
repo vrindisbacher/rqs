@@ -1,8 +1,17 @@
 use std::{io::Write, time::SystemTime};
 
+use serde::{Deserialize, Serialize};
+
 use crate::rqs::{LOG_ROOT, QUEUE_LOG};
 
 use super::rqs_utils::exponential_backoff;
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct MessageLogLine<'a> {
+    pub message_id: &'a str,
+    pub message_content: &'a str,
+    pub timestamp: u64,
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct RQSQueue {
@@ -30,8 +39,12 @@ impl RQSQueue {
                     self.name, "message.log"
                 ))?;
             file.write_fmt(format_args!(
-                "message_id:{message_id} message_content:{message_content} timestamp:{}\n",
-                now.as_secs()
+                "{}\n",
+                &serde_json::to_string(&MessageLogLine {
+                    message_id,
+                    message_content,
+                    timestamp: now.as_secs(),
+                })?
             ))
         })
         .await;

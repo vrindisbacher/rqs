@@ -3,6 +3,7 @@ use std::{io::Write, time::SystemTime};
 use rqs_queue::RQSQueue;
 use rqs_types::{RQSError, RQSEvent};
 use rqs_utils::exponential_backoff;
+use serde::{Deserialize, Serialize};
 
 mod rqs_queue;
 pub mod rqs_types;
@@ -11,6 +12,13 @@ mod rqs_utils;
 pub static LOG_ROOT: &'static str = "tmp/log/";
 pub static EVENT_LOG: &'static str = "event.log";
 pub static QUEUE_LOG: &'static str = "queues/";
+
+#[derive(Serialize, Deserialize)]
+pub struct RQSLogLine<'a> {
+    pub event: &'a str,
+    pub queue_id: &'a str,
+    pub timestamp: u64,
+}
 
 #[derive(Debug, PartialEq)]
 pub struct RQS {
@@ -69,18 +77,12 @@ impl RQS {
             exponential_backoff(|| std::fs::read_to_string(format!("{LOG_ROOT}{EVENT_LOG}"))).await;
 
         for line in event_log.lines().map(String::from).collect::<Vec<String>>() {
-            let parts = line.split(" ").collect::<Vec<&str>>();
-            if !parts.len() == 3 {
-                panic!("Log file at path {LOG_ROOT}{EVENT_LOG} is corrupt. The failing line was {line}")
-            }
-            let instr = parts.get(0).expect(&format!(
+            let event: RQSLogLine = serde_json::from_str(&line).expect(&format!(
                 "Log file at path {LOG_ROOT}{EVENT_LOG} is corrupt. The failing line was {line}"
             ));
-            let name = parts.get(1).expect(&format!("Log file at path {LOG_ROOT}{EVENT_LOG} is corrupt. The failing line was {line}")).split(":").collect::<Vec<&str>>().get(1).expect(&format!("Log file at path {LOG_ROOT}{EVENT_LOG} is corrupt. The failing line was {line}")).to_string();
-            let _timestamp = parts.get(2).expect(&format!("Log file at path {LOG_ROOT}{EVENT_LOG} is corrupt. The failing line was {line}")).split(":").collect::<Vec<&str>>().get(1).expect(&format!("Log file at path {LOG_ROOT}{EVENT_LOG} is corrupt. The failing line was {line}"));
-            match *instr {
-                "QueueCreated" => self.create_queue(name).await.expect("Could not create queue"),
-                "QueueDeleted" => self.delete_queue(name).await.expect("Could not delete queue"),
+            match event.event {
+                "QueueCreated" => self.create_queue(event.queue_id.to_string()).await.expect("Could not create queue"),
+                "QueueDeleted" => self.delete_queue(event.queue_id.to_string()).await.expect("Could not delete queue"),
                 _ => panic!("Log file at path {LOG_ROOT}{EVENT_LOG} is corrupt. The failing line was {line}")
             };
         }
@@ -97,8 +99,12 @@ impl RQS {
                         .append(true)
                         .open(format!("{LOG_ROOT}{EVENT_LOG}"))?;
                     file.write_fmt(format_args!(
-                        "QueueCreated name:{name} timestamp:{}\n",
-                        now.as_secs()
+                        "{}\n",
+                        &serde_json::to_string(&RQSLogLine {
+                            event: "QueueCreated",
+                            queue_id: name.as_str(),
+                            timestamp: now.as_secs(),
+                        })?
                     ))
                 })
                 .await;
@@ -110,8 +116,12 @@ impl RQS {
                         .append(true)
                         .open(format!("{LOG_ROOT}{EVENT_LOG}"))?;
                     file.write_fmt(format_args!(
-                        "QueueDeleted name:{name} timestamp:{}\n",
-                        now.as_secs()
+                        "{}\n",
+                        &serde_json::to_string(&RQSLogLine {
+                            event: "QueueDeleted",
+                            queue_id: name.as_str(),
+                            timestamp: now.as_secs(),
+                        })?
                     ))
                 })
                 .await;
@@ -153,7 +163,9 @@ impl RQS {
 mod rqs_test {
     use serial_test::serial;
 
-    use super::{rqs_types::RQSEvent, EVENT_LOG, LOG_ROOT, RQS};
+    use crate::rqs::rqs_queue::MessageLogLine;
+
+    use super::{rqs_types::RQSEvent, EVENT_LOG, LOG_ROOT, QUEUE_LOG, RQS};
 
     // NOTE: using serial because these tests cannot be run concurrently
 
@@ -275,10 +287,23 @@ mod rqs_test {
         })
         .await
         .expect("Could not create queue_1");
-        rqs.handle_event(RQSEvent::NewMessage { 
-            message_id: "hello".to_string(), 
+        rqs.handle_event(RQSEvent::NewMessage {
+            message_id: "hello".to_string(),
             message_content: "{helloworlditsme: 1}".to_string(),
-            queue_id: "queue_1".to_string()
-        }).await.expect("Failed to send message");
+            queue_id: "queue_1".to_string(),
+        })
+        .await
+        .expect("Failed to send message");
+
+        let event_log = std::fs::read_to_string(format!(
+            "{LOG_ROOT}{QUEUE_LOG}{}/{}",
+            "queue_1", "message.log"
+        ))
+        .unwrap();
+        for line in event_log.lines().map(String::from).collect::<Vec<String>>() {
+            let message: MessageLogLine = serde_json::from_str(&line).unwrap();
+            assert_eq!(message.message_id, "hello");
+            assert_eq!(message.message_content, "{helloworlditsme: 1}");
+        }
     }
 }
