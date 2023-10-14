@@ -7,7 +7,7 @@ use crate::GLOBAL_DATA;
 
 use self::queue::{DeleteQueueRequest, DeleteQueueResponse};
 
-mod queue;
+pub mod queue;
 
 #[derive(Debug, Default)]
 pub struct Queue;
@@ -24,17 +24,19 @@ impl QueueService for Queue {
         &self,
         request: Request<NewQueueRequest>,
     ) -> Result<Response<NewQueueResponse>, Status> {
-        let queue_name = request.into_inner().queue_id;
+        let queue_id = request.into_inner().queue_id;
         let response = match GLOBAL_DATA
             .lock()
             .await
-            .handle_event(RQSEvent::QueueCreated(queue_name))
+            .handle_event(RQSEvent::QueueCreated { queue_id })
             .await
         {
             Ok(_) => NewQueueResponse {
+                success: true,
                 data: "Successfully created queue".to_string(),
             },
             Err(e) => NewQueueResponse {
+                success: false,
                 data: format!("Failed to create queue. Failed with error: {e}"),
             },
         };
@@ -45,17 +47,19 @@ impl QueueService for Queue {
         &self,
         request: Request<DeleteQueueRequest>,
     ) -> Result<Response<DeleteQueueResponse>, Status> {
-        let queue_name = request.into_inner().queue_id;
+        let queue_id = request.into_inner().queue_id;
         let response = match GLOBAL_DATA
             .lock()
             .await
-            .handle_event(RQSEvent::QueueDeleted(queue_name))
+            .handle_event(RQSEvent::QueueDeleted { queue_id })
             .await
         {
             Ok(_) => DeleteQueueResponse {
+                success: true,
                 data: "Successfully deleted queue".to_string(),
             },
             Err(e) => DeleteQueueResponse {
+                success: true,
                 data: format!("Failed to delete queue. Failed with error: {e}"),
             },
         };

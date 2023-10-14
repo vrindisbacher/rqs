@@ -9,6 +9,8 @@ pub struct NewQueueRequest {
 pub struct NewQueueResponse {
     #[prost(string, tag = "1")]
     pub data: ::prost::alloc::string::String,
+    #[prost(bool, tag = "2")]
+    pub success: bool,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -21,6 +23,8 @@ pub struct DeleteQueueRequest {
 pub struct DeleteQueueResponse {
     #[prost(string, tag = "1")]
     pub data: ::prost::alloc::string::String,
+    #[prost(bool, tag = "2")]
+    pub success: bool,
 }
 /// Generated client implementations.
 pub mod queue_service_client {

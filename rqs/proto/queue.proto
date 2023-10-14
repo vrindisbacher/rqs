@@ -12,6 +12,7 @@ message NewQueueRequest {
 
 message NewQueueResponse {
 	string data = 1;
+	bool success = 2;
 }
 
 message DeleteQueueRequest {
@@ -20,4 +21,5 @@ message DeleteQueueRequest {
 
 message DeleteQueueResponse {
 	string data = 1;
+	bool success = 2;
 }

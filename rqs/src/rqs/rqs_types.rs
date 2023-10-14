@@ -4,6 +4,7 @@ use std::fmt::Display;
 pub enum RQSError {
     FailedToCreateQueue(String),
     FailedToDeleteQueue(String),
+    FailedToAddMessage(String),
 }
 
 impl Display for RQSError {
@@ -11,12 +12,22 @@ impl Display for RQSError {
         match self {
             RQSError::FailedToCreateQueue(s) => write!(f, "{}", s),
             RQSError::FailedToDeleteQueue(s) => write!(f, "{}", s),
+            RQSError::FailedToAddMessage(s) => write!(f, "{}", s),
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum RQSEvent {
-    QueueCreated(String),
-    QueueDeleted(String),
+    QueueCreated {
+        queue_id: String,
+    },
+    QueueDeleted {
+        queue_id: String,
+    },
+    NewMessage {
+        queue_id: String,
+        message_id: String,
+        message_content: String,
+    },
 }

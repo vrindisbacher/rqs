@@ -6,8 +6,8 @@ use tonic::transport::Server;
 
 use once_cell::sync::Lazy;
 
-mod message;
-mod queue;
+pub mod message;
+pub mod queue;
 mod rqs;
 
 static GLOBAL_DATA: Lazy<Mutex<RQS>> = Lazy::new(|| Mutex::new(RQS::new()));

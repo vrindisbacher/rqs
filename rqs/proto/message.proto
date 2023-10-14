@@ -15,6 +15,7 @@ message NewMessageRequest {
 
 message NewMessageResponse {
 	string data = 1;
+	bool success = 2;
 }
 
 message ConsumeMessageRequest {
@@ -34,4 +35,5 @@ message AckMessageRequest {
 
 message AckMessageResponse {
 	string data = 1; 
+	bool success = 2;
 }

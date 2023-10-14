@@ -32,10 +32,32 @@ impl RQS {
 
     pub async fn handle_event(&mut self, event: RQSEvent) -> Result<(), RQSError> {
         match event.clone() {
-            RQSEvent::QueueCreated(queue_name) => self.create_queue(queue_name).await?,
-            RQSEvent::QueueDeleted(queue_name) => self.delete_queue(queue_name).await?,
+            RQSEvent::QueueCreated { queue_id } => {
+                self.create_queue(queue_id).await?;
+                self.log_event(event).await;
+            }
+            RQSEvent::QueueDeleted { queue_id } => {
+                self.delete_queue(queue_id).await?;
+                self.log_event(event).await;
+            }
+            RQSEvent::NewMessage {
+                queue_id,
+                message_id,
+                message_content,
+            } => {
+                let queue = match self.queues.iter().find(|x| x.get_name() == &queue_id) {
+                    None => {
+                        return Err(RQSError::FailedToAddMessage(format!(
+                            "Queue {queue_id} does not exist"
+                        )))
+                    }
+                    Some(queue) => queue,
+                };
+                queue
+                    .add_message_to_queue(&message_id, &message_content)
+                    .await;
+            }
         }
-        self.log_event(event).await;
         Ok(())
     }
 
@@ -68,7 +90,7 @@ impl RQS {
         let now =
             exponential_backoff(|| SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)).await;
         match event {
-            RQSEvent::QueueCreated(name) => {
+            RQSEvent::QueueCreated { queue_id: name } => {
                 exponential_backoff(|| {
                     let mut file = std::fs::OpenOptions::new()
                         .create(true)
@@ -81,7 +103,7 @@ impl RQS {
                 })
                 .await;
             }
-            RQSEvent::QueueDeleted(name) => {
+            RQSEvent::QueueDeleted { queue_id: name } => {
                 exponential_backoff(|| {
                     let mut file = std::fs::OpenOptions::new()
                         .create(true)
@@ -94,6 +116,11 @@ impl RQS {
                 })
                 .await;
             }
+            RQSEvent::NewMessage {
+                queue_id: _,
+                message_id: _,
+                message_content: _,
+            } => (),
         }
     }
 
@@ -140,15 +167,21 @@ mod rqs_test {
         delete_event_log();
         let mut rqs = RQS::new();
         rqs.revive_from_log().await;
-        rqs.handle_event(RQSEvent::QueueCreated("queue_1".to_string()))
-            .await
-            .expect("Could not create queue_1");
-        rqs.handle_event(RQSEvent::QueueCreated("queue_2".to_string()))
-            .await
-            .expect("Could not create queue_2");
-        rqs.handle_event(RQSEvent::QueueDeleted("queue_1".to_string()))
-            .await
-            .expect("Could not delete queue_1");
+        rqs.handle_event(RQSEvent::QueueCreated {
+            queue_id: "queue_1".to_string(),
+        })
+        .await
+        .expect("Could not create queue_1");
+        rqs.handle_event(RQSEvent::QueueCreated {
+            queue_id: "queue_2".to_string(),
+        })
+        .await
+        .expect("Could not create queue_2");
+        rqs.handle_event(RQSEvent::QueueDeleted {
+            queue_id: "queue_1".to_string(),
+        })
+        .await
+        .expect("Could not delete queue_1");
 
         let mut rqs_from_revive = RQS::new();
         rqs_from_revive.revive_from_log().await;
@@ -161,20 +194,28 @@ mod rqs_test {
         delete_event_log();
         let mut rqs = RQS::new();
         rqs.revive_from_log().await;
-        rqs.handle_event(RQSEvent::QueueCreated("queue_1".to_string()))
-            .await
-            .expect("Could not create queue_1");
-        rqs.handle_event(RQSEvent::QueueCreated("queue_2".to_string()))
-            .await
-            .expect("Could not create queue_2");
-        rqs.handle_event(RQSEvent::QueueDeleted("queue_1".to_string()))
-            .await
-            .expect("Could not delete queue_1");
+        rqs.handle_event(RQSEvent::QueueCreated {
+            queue_id: "queue_1".to_string(),
+        })
+        .await
+        .expect("Could not create queue_1");
+        rqs.handle_event(RQSEvent::QueueCreated {
+            queue_id: "queue_2".to_string(),
+        })
+        .await
+        .expect("Could not create queue_2");
+        rqs.handle_event(RQSEvent::QueueDeleted {
+            queue_id: "queue_1".to_string(),
+        })
+        .await
+        .expect("Could not delete queue_1");
 
         let mut rqs_from_revive = RQS::new();
         rqs_from_revive.revive_from_log().await;
         rqs_from_revive
-            .handle_event(RQSEvent::QueueCreated("queue_3".to_string()))
+            .handle_event(RQSEvent::QueueCreated {
+                queue_id: "queue_3".to_string(),
+            })
             .await
             .expect("Could not create queue_3");
         let names = rqs_from_revive
@@ -191,11 +232,15 @@ mod rqs_test {
         delete_event_log();
         let mut rqs = RQS::new();
         rqs.revive_from_log().await;
-        rqs.handle_event(RQSEvent::QueueCreated("queue_1".to_string()))
-            .await
-            .expect("Could not create queue_1");
+        rqs.handle_event(RQSEvent::QueueCreated {
+            queue_id: "queue_1".to_string(),
+        })
+        .await
+        .expect("Could not create queue_1");
         assert!(rqs
-            .handle_event(RQSEvent::QueueCreated("queue_1".to_string()))
+            .handle_event(RQSEvent::QueueCreated {
+                queue_id: "queue_1".to_string()
+            })
             .await
             .is_err());
     }
@@ -206,12 +251,34 @@ mod rqs_test {
         delete_event_log();
         let mut rqs = RQS::new();
         rqs.revive_from_log().await;
-        rqs.handle_event(RQSEvent::QueueCreated("queue_1".to_string()))
-            .await
-            .expect("Could not create queue_1");
+        rqs.handle_event(RQSEvent::QueueCreated {
+            queue_id: "queue_1".to_string(),
+        })
+        .await
+        .expect("Could not create queue_1");
         assert!(rqs
-            .handle_event(RQSEvent::QueueDeleted("queue_2".to_string()))
+            .handle_event(RQSEvent::QueueDeleted {
+                queue_id: "queue_2".to_string()
+            })
             .await
             .is_err());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_create_message() {
+        delete_event_log();
+        let mut rqs = RQS::new();
+        rqs.revive_from_log().await;
+        rqs.handle_event(RQSEvent::QueueCreated {
+            queue_id: "queue_1".to_string(),
+        })
+        .await
+        .expect("Could not create queue_1");
+        rqs.handle_event(RQSEvent::NewMessage { 
+            message_id: "hello".to_string(), 
+            message_content: "{helloworlditsme: 1}".to_string(),
+            queue_id: "queue_1".to_string()
+        }).await.expect("Failed to send message");
     }
 }

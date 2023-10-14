@@ -13,6 +13,8 @@ pub struct NewMessageRequest {
 pub struct NewMessageResponse {
     #[prost(string, tag = "1")]
     pub data: ::prost::alloc::string::String,
+    #[prost(bool, tag = "2")]
+    pub success: bool,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -43,6 +45,8 @@ pub struct AckMessageRequest {
 pub struct AckMessageResponse {
     #[prost(string, tag = "1")]
     pub data: ::prost::alloc::string::String,
+    #[prost(bool, tag = "2")]
+    pub success: bool,
 }
 /// Generated client implementations.
 pub mod message_service_client {
