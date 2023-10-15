@@ -2,7 +2,6 @@ use queue::queue_service_server::{QueueService, QueueServiceServer};
 use queue::{NewQueueRequest, NewQueueResponse};
 use tonic::{Request, Response, Status};
 
-use crate::rqs::rqs_types::RQSEvent;
 use crate::GLOBAL_DATA;
 
 use self::queue::{DeleteQueueRequest, DeleteQueueResponse};

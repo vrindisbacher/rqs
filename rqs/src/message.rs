@@ -5,7 +5,6 @@ use message::{
 };
 use tonic::{Request, Response, Status};
 
-use crate::rqs::rqs_types::RQSEvent;
 use crate::GLOBAL_DATA;
 
 mod message;
@@ -84,7 +83,7 @@ impl MessageService for Message {
 
     async fn ack_message(
         &self,
-        request: Request<AckMessageRequest>,
+        _request: Request<AckMessageRequest>,
     ) -> Result<Response<AckMessageResponse>, Status> {
         todo!()
     }
