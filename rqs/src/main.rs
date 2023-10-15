@@ -30,9 +30,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 mod queue_client_server_test {
     use std::time::Duration;
 
+    use crate::message::message::{ConsumeMessageRequest, NewMessageRequest};
     use crate::rqs::{EVENT_LOG, LOG_ROOT, RQS};
     use crate::{
-        message::Message,
+        message::{message::message_service_client::MessageServiceClient, Message},
         queue::{
             queue::{queue_service_client::QueueServiceClient, NewQueueRequest},
             Queue,
@@ -172,5 +173,47 @@ mod queue_client_server_test {
             .map(|x| x.get_name())
             .collect::<Vec<&String>>();
         assert_eq!(queues, vec!["queue_1", "queue_2"]);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_produce_consumer_to_queue() {
+        start().await;
+        let client_addr = "http://127.0.0.1:8080";
+        let mut client = QueueServiceClient::connect(client_addr)
+            .await
+            .expect("Could not create queue client");
+        let create_request = NewQueueRequest {
+            queue_id: "queue_1".to_string(),
+            visibility_timeout: 5,
+        };
+        client
+            .new_queue(create_request)
+            .await
+            .expect("Could not create queue");
+        let mut message_client = MessageServiceClient::connect(client_addr)
+            .await
+            .expect("Could not create message client");
+
+        for i in 0..10 {
+            message_client
+                .new_message(NewMessageRequest {
+                    queue_id: "queue_1".to_string(),
+                    message_id: format!("{i}"),
+                    message_content: format!("{i}"),
+                })
+                .await
+                .expect("Failed to send message");
+        }
+        let mut messages = vec![];
+        for _ in 0..10 {
+            let message = message_client
+                .consume_message(ConsumeMessageRequest {
+                    queue_id: "queue_1".to_string(),
+                })
+                .await.expect("Could not consume messsage");
+            messages.push(message.into_inner().id.expect("Message ID not there and it should be"));
+        }
+        assert_eq!(messages, (1..=10).collect::<Vec<u64>>());
     }
 }

@@ -7,7 +7,7 @@ use tonic::{Request, Response, Status};
 
 use crate::GLOBAL_DATA;
 
-mod message;
+pub mod message;
 
 #[derive(Debug, Default)]
 pub struct Message;
