@@ -57,6 +57,7 @@ impl RQSQueue {
             std::fs::OpenOptions::new()
                 .create(true)
                 .write(true)
+                .truncate(true)
                 .open(format!(
                     "{LOG_ROOT}{QUEUE_LOG}{}/{}",
                     self.name, "message.log"
@@ -109,5 +110,10 @@ impl RQSQueue {
                 self.messages.get(idx)
             }
         }
+    }
+
+    pub async fn ack_message(&mut self, id: u64) {
+        self.messages.retain(|x| x.id != id);
+        self.write_log().await;
     }
 }

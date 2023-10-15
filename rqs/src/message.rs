@@ -83,8 +83,22 @@ impl MessageService for Message {
 
     async fn ack_message(
         &self,
-        _request: Request<AckMessageRequest>,
+        request: Request<AckMessageRequest>,
     ) -> Result<Response<AckMessageResponse>, Status> {
-        todo!()
+        let inner = request.into_inner();
+        let queue_id = inner.queue_id;
+        let id = inner.id;
+        let mut queues = GLOBAL_DATA.lock().await;
+        let ack_response = match queues.ack_message(queue_id, id).await {
+            Ok(_) => AckMessageResponse {
+                data: format!("Successfully ack'd message with id {id}"),
+                success: true,
+            },
+            Err(e) => AckMessageResponse {
+                data: format!("Failed to ack message. Failed with {e}"),
+                success: false,
+            },
+        };
+        Ok(Response::new(ack_response))
     }
 }

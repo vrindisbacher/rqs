@@ -32,7 +32,7 @@ message ConsumeMessageResponse {
 
 message AckMessageRequest {
 	string queue_id = 1;
-	string id = 2; 
+	uint64 id = 2; 
 }
 
 message AckMessageResponse {

@@ -179,10 +179,29 @@ impl RQS {
         };
         Ok(queue.take_message_from_queue().await)
     }
+
+    pub async fn ack_message(
+        &mut self,
+        queue_id: String,
+        id: u64
+    ) -> Result<(), RQSError> {
+        let queue = match self.queues.iter_mut().find(|x| x.get_name() == &queue_id) {
+            Some(q) => q,
+            None => {
+                return Err(RQSError::FailedToGetMessage(format!(
+                    "Queue with name {queue_id} does not exist"
+                )))
+            }
+        };
+        queue.ack_message(id).await;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod rqs_test {
+    use std::time::Duration;
+
     use serial_test::serial;
 
     use crate::rqs::rqs_queue::MessageLogLine;
@@ -355,5 +374,33 @@ mod rqs_test {
 
         let message = rqs.get_message("queue_1".to_string()).await.unwrap();
         assert!(message.is_none());
+    }
+
+    #[tokio::test]
+    #[serial] 
+    async fn test_ack_message() {
+        delete_event_log();
+        let vis_timeout = 1;
+        let mut rqs = RQS::new();
+        rqs.revive_from_log().await;
+        rqs.create_queue("queue_1".to_string(), vis_timeout)
+            .await
+            .expect("Could not create queue_1");
+        rqs.new_message(
+            "queue_1".to_string(),
+            "hello".to_string(),
+            "{helloworlditsme: 1}".to_string(),
+        )
+        .await
+        .expect("Failed to send message");
+
+        let id = rqs
+            .get_message("queue_1".to_string())
+            .await
+            .unwrap()
+            .unwrap().id;
+        rqs.ack_message("queue_1".to_string(), id).await.expect("could not ack message");
+        tokio::time::sleep(Duration::from_secs(vis_timeout as u64 + 1)).await;
+        assert!(rqs.get_message("queue_1".to_string()).await.unwrap().is_none());
     }
 }

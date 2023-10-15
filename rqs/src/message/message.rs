@@ -41,8 +41,8 @@ pub struct ConsumeMessageResponse {
 pub struct AckMessageRequest {
     #[prost(string, tag = "1")]
     pub queue_id: ::prost::alloc::string::String,
-    #[prost(string, tag = "2")]
-    pub id: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "2")]
+    pub id: u64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
