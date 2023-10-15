@@ -16,6 +16,7 @@ pub static QUEUE_LOG: &'static str = "queues/";
 #[derive(Serialize, Deserialize)]
 pub struct RQSLogLine<'a> {
     pub event: &'a str,
+    pub visibility_timeout: u32,
     pub queue_id: &'a str,
     pub timestamp: u64,
 }
@@ -40,8 +41,8 @@ impl RQS {
 
     pub async fn handle_event(&mut self, event: RQSEvent) -> Result<(), RQSError> {
         match event.clone() {
-            RQSEvent::QueueCreated { queue_id } => {
-                self.create_queue(queue_id).await?;
+            RQSEvent::QueueCreated { queue_id, visibility_timeout } => {
+                self.create_queue(queue_id, visibility_timeout).await?;
                 self.log_event(event).await;
             }
             RQSEvent::QueueDeleted { queue_id } => {
@@ -81,7 +82,7 @@ impl RQS {
                 "Log file at path {LOG_ROOT}{EVENT_LOG} is corrupt. The failing line was {line}"
             ));
             match event.event {
-                "QueueCreated" => self.create_queue(event.queue_id.to_string()).await.expect("Could not create queue"),
+                "QueueCreated" => self.create_queue(event.queue_id.to_string(), event.visibility_timeout).await.expect("Could not create queue"),
                 "QueueDeleted" => self.delete_queue(event.queue_id.to_string()).await.expect("Could not delete queue"),
                 _ => panic!("Log file at path {LOG_ROOT}{EVENT_LOG} is corrupt. The failing line was {line}")
             };
@@ -92,7 +93,7 @@ impl RQS {
         let now =
             exponential_backoff(|| SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)).await;
         match event {
-            RQSEvent::QueueCreated { queue_id: name } => {
+            RQSEvent::QueueCreated { queue_id: name, visibility_timeout } => {
                 exponential_backoff(|| {
                     let mut file = std::fs::OpenOptions::new()
                         .create(true)
@@ -102,6 +103,7 @@ impl RQS {
                         "{}\n",
                         &serde_json::to_string(&RQSLogLine {
                             event: "QueueCreated",
+                            visibility_timeout,
                             queue_id: name.as_str(),
                             timestamp: now.as_secs(),
                         })?
@@ -119,6 +121,7 @@ impl RQS {
                         "{}\n",
                         &serde_json::to_string(&RQSLogLine {
                             event: "QueueDeleted",
+                            visibility_timeout: 0,
                             queue_id: name.as_str(),
                             timestamp: now.as_secs(),
                         })?
@@ -134,7 +137,7 @@ impl RQS {
         }
     }
 
-    async fn create_queue(&mut self, name: String) -> Result<(), RQSError> {
+    async fn create_queue(&mut self, name: String, visibility_timeout: u32) -> Result<(), RQSError> {
         if self.queues.iter().any(|x| x.get_name() == &name) {
             return Err(RQSError::FailedToCreateQueue(format!(
                 "Queue with name {name} already exists"
@@ -142,7 +145,7 @@ impl RQS {
         }
         exponential_backoff(|| std::fs::create_dir_all(format!("{LOG_ROOT}{QUEUE_LOG}{name}")))
             .await;
-        self.queues.push(RQSQueue::new(name));
+        self.queues.push(RQSQueue::new(name, visibility_timeout));
         Ok(())
     }
 
@@ -181,11 +184,13 @@ mod rqs_test {
         rqs.revive_from_log().await;
         rqs.handle_event(RQSEvent::QueueCreated {
             queue_id: "queue_1".to_string(),
+            visibility_timeout: 10
         })
         .await
         .expect("Could not create queue_1");
         rqs.handle_event(RQSEvent::QueueCreated {
             queue_id: "queue_2".to_string(),
+            visibility_timeout: 10
         })
         .await
         .expect("Could not create queue_2");
@@ -208,11 +213,13 @@ mod rqs_test {
         rqs.revive_from_log().await;
         rqs.handle_event(RQSEvent::QueueCreated {
             queue_id: "queue_1".to_string(),
+            visibility_timeout: 10
         })
         .await
         .expect("Could not create queue_1");
         rqs.handle_event(RQSEvent::QueueCreated {
             queue_id: "queue_2".to_string(),
+            visibility_timeout: 10
         })
         .await
         .expect("Could not create queue_2");
@@ -227,6 +234,7 @@ mod rqs_test {
         rqs_from_revive
             .handle_event(RQSEvent::QueueCreated {
                 queue_id: "queue_3".to_string(),
+                visibility_timeout: 10
             })
             .await
             .expect("Could not create queue_3");
@@ -246,12 +254,14 @@ mod rqs_test {
         rqs.revive_from_log().await;
         rqs.handle_event(RQSEvent::QueueCreated {
             queue_id: "queue_1".to_string(),
+            visibility_timeout: 10
         })
         .await
         .expect("Could not create queue_1");
         assert!(rqs
             .handle_event(RQSEvent::QueueCreated {
-                queue_id: "queue_1".to_string()
+                queue_id: "queue_1".to_string(),
+                visibility_timeout: 10
             })
             .await
             .is_err());
@@ -265,6 +275,7 @@ mod rqs_test {
         rqs.revive_from_log().await;
         rqs.handle_event(RQSEvent::QueueCreated {
             queue_id: "queue_1".to_string(),
+            visibility_timeout: 10
         })
         .await
         .expect("Could not create queue_1");
@@ -284,6 +295,7 @@ mod rqs_test {
         rqs.revive_from_log().await;
         rqs.handle_event(RQSEvent::QueueCreated {
             queue_id: "queue_1".to_string(),
+            visibility_timeout: 10
         })
         .await
         .expect("Could not create queue_1");

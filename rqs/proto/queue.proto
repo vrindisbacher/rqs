@@ -8,6 +8,7 @@ service QueueService {
 
 message NewQueueRequest {
 	string queue_id = 1;
+	uint32 visibility_timeout = 2;
 }
 
 message NewQueueResponse {

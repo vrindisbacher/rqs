@@ -21,6 +21,7 @@ impl Display for RQSError {
 pub enum RQSEvent {
     QueueCreated {
         queue_id: String,
+        visibility_timeout: u32
     },
     QueueDeleted {
         queue_id: String,

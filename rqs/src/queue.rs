@@ -24,11 +24,13 @@ impl QueueService for Queue {
         &self,
         request: Request<NewQueueRequest>,
     ) -> Result<Response<NewQueueResponse>, Status> {
-        let queue_id = request.into_inner().queue_id;
+        let inner = request.into_inner();
+        let queue_id = inner.queue_id;
+        let visibility_timeout = inner.visibility_timeout;
         let response = match GLOBAL_DATA
             .lock()
             .await
-            .handle_event(RQSEvent::QueueCreated { queue_id })
+            .handle_event(RQSEvent::QueueCreated { queue_id, visibility_timeout })
             .await
         {
             Ok(_) => NewQueueResponse {
@@ -122,6 +124,7 @@ mod queue_client_server_test {
             .expect("Could not create client");
         let request = NewQueueRequest {
             queue_id: "queue_1".to_string(),
+            visibility_timeout: 5,
         };
         client
             .new_queue(request)
@@ -148,6 +151,7 @@ mod queue_client_server_test {
             .expect("Could not create client");
         let request = NewQueueRequest {
             queue_id: "queue_1".to_string(),
+            visibility_timeout: 5,
         };
         client
             .new_queue(request)
@@ -181,9 +185,11 @@ mod queue_client_server_test {
             .expect("Could not create client");
         let request1 = NewQueueRequest {
             queue_id: "queue_1".to_string(),
+            visibility_timeout: 5,
         };
         let request2 = NewQueueRequest {
             queue_id: "queue_2".to_string(),
+            visibility_timeout: 5,
         };
         futures::future::join_all([
             client.clone().new_queue(request1),

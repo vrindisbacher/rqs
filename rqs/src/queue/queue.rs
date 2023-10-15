@@ -3,6 +3,8 @@
 pub struct NewQueueRequest {
     #[prost(string, tag = "1")]
     pub queue_id: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "2")]
+    pub visibility_timeout: u32,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
