@@ -1,31 +1,34 @@
-use std::{io::Write, time::SystemTime};
-
+use std::{io::Write, time::SystemTime, error::Error};
 use serde::{Deserialize, Serialize};
 
 use crate::rqs::{LOG_ROOT, QUEUE_LOG};
 
 use super::rqs_utils::exponential_backoff;
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct MessageLogLine<'a> {
-    pub message_id: &'a str,
-    pub message_content: &'a str,
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct MessageLogLine {
+    pub id: u128,
+    pub message_id: String,
+    pub message_content: String,
     pub timestamp: u64,
-    pub consumed: bool,
     pub read_at: Option<u64>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct RQSQueue {
     name: String,
+    messages: Vec<MessageLogLine>,
     visibility_timeout: u32,
+    last_id: u128
 }
 
 impl RQSQueue {
     pub fn new(name: String, visibility_timeout: u32) -> Self {
         Self {
             name,
+            messages: Vec::new(),
             visibility_timeout,
+            last_id: 0
         }
     }
 
@@ -33,57 +36,73 @@ impl RQSQueue {
         &self.name
     }
 
-    pub async fn add_message_to_queue(&self, message_id: &String, message_content: &String) {
-        let now =
-            exponential_backoff(|| SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)).await;
-        exponential_backoff(|| {
-            let mut file = std::fs::OpenOptions::new()
+    pub async fn revive_from_log(&mut self) {
+        let log_file = match std::fs::read_to_string(format!(
+                    "{LOG_ROOT}{QUEUE_LOG}{}/{}",
+                    self.name, "message.log"
+                )) {
+            Ok(s) => s, 
+            Err(_) => return,
+        };
+        for line in log_file.lines() {
+            let message : MessageLogLine = serde_json::from_str(&String::from(line)).expect("Corrupt mesage log file");
+            self.last_id = message.id;
+            self.messages.push(message);
+        }
+    }
+
+    async fn write_log(&self) {
+        let mut file = exponential_backoff(|| 
+             std::fs::OpenOptions::new()
                 .create(true)
-                .append(true)
+                .write(true)
                 .open(format!(
                     "{LOG_ROOT}{QUEUE_LOG}{}/{}",
                     self.name, "message.log"
-                ))?;
+                ))
+        ).await;
+        for message in self.messages.iter() {
             file.write_fmt(format_args!(
                 "{}\n",
-                &serde_json::to_string(&MessageLogLine {
-                    message_id,
-                    message_content,
-                    consumed: false,
-                    timestamp: now.as_secs(),
-                    read_at: None
-                })?
-            ))
-        })
-        .await;
+                &serde_json::to_string(message).expect("Could not write log message to string")
+            )).expect("Could not write to file")
+        }
     }
 
-    pub async fn take_message_from_queue(&mut self) -> Option<String> {
-        let log = exponential_backoff(|| {
-            std::fs::read_to_string(format!(
-                "{LOG_ROOT}{QUEUE_LOG}{}/{}",
-                self.name, "message.log"
-            ))
-        })
-        .await;
-        let mut lines = log.lines().map(String::from);
+    pub async fn add_message_to_queue(&mut self, message_id: String, message_content: String) {
+        let now =
+            exponential_backoff(|| SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)).await;
+        let message = MessageLogLine {
+            id: self.last_id + 1,
+            message_id,
+            message_content,
+            timestamp: now.as_secs(),
+            read_at: None,
+        };
+        self.messages.push(message);
+        self.write_log().await;
+        self.last_id += 1;
+    }
+
+    pub async fn take_message_from_queue(&mut self) -> Option<&MessageLogLine> {
         let now = exponential_backoff(|| SystemTime::now().duration_since(SystemTime::UNIX_EPOCH))
             .await
             .as_secs();
-        let mut count = 0;
-        lines.find(|x| {
-            count += 1;
-            let mut log_line: MessageLogLine = serde_json::from_str(x).expect("Log file corrupt");
-            if !log_line.consumed
-                || (log_line.read_at.is_some()
-                    && log_line.read_at.unwrap() + self.visibility_timeout as u64 > now)
+        let idx = self.messages.iter_mut().position(|x| { 
+            if x.read_at.is_some() && x.read_at.unwrap() + self.visibility_timeout as u64 > now
             {
-                log_line.consumed = true; 
-                log_line.read_at = Some(now);
+                x.read_at = Some(now);
                 true
             } else {
                 false
             }
-        })
+        }); 
+        match idx {
+            None => None, 
+            Some(idx) => {
+                self.write_log().await;
+                self.messages.get(idx)
+            }
+        }
     }
 }

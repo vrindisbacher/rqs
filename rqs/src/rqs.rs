@@ -54,7 +54,7 @@ impl RQS {
                 message_id,
                 message_content,
             } => {
-                let queue = match self.queues.iter().find(|x| x.get_name() == &queue_id) {
+                let queue = match self.queues.iter_mut().find(|x| x.get_name() == &queue_id) {
                     None => {
                         return Err(RQSError::FailedToAddMessage(format!(
                             "Queue {queue_id} does not exist"
@@ -63,7 +63,7 @@ impl RQS {
                     Some(queue) => queue,
                 };
                 queue
-                    .add_message_to_queue(&message_id, &message_content)
+                    .add_message_to_queue(message_id, message_content)
                     .await;
             }
         }
@@ -82,10 +82,14 @@ impl RQS {
                 "Log file at path {LOG_ROOT}{EVENT_LOG} is corrupt. The failing line was {line}"
             ));
             match event.event {
-                "QueueCreated" => self.create_queue(event.queue_id.to_string(), event.visibility_timeout).await.expect("Could not create queue"),
+                "QueueCreated" => self.create_queue(event.queue_id.to_string(), event.visibility_timeout).await.expect("Could not create queue"), 
                 "QueueDeleted" => self.delete_queue(event.queue_id.to_string()).await.expect("Could not delete queue"),
                 _ => panic!("Log file at path {LOG_ROOT}{EVENT_LOG} is corrupt. The failing line was {line}")
             };
+        }
+
+        for queue in self.queues.iter_mut() {
+            queue.revive_from_log().await;
         }
     }
 
@@ -122,8 +126,7 @@ impl RQS {
                         &serde_json::to_string(&RQSLogLine {
                             event: "QueueDeleted",
                             visibility_timeout: 0,
-                            queue_id: name.as_str(),
-                            timestamp: now.as_secs(),
+                            queue_id: name.as_str(), timestamp: now.as_secs(),
                         })?
                     ))
                 })
