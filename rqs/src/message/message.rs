@@ -25,12 +25,16 @@ pub struct ConsumeMessageRequest {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ConsumeMessageResponse {
-    #[prost(string, tag = "1")]
-    pub message_uuid: ::prost::alloc::string::String,
-    #[prost(string, tag = "2")]
-    pub message_id: ::prost::alloc::string::String,
-    #[prost(string, tag = "3")]
-    pub message_content: ::prost::alloc::string::String,
+    #[prost(uint64, optional, tag = "1")]
+    pub id: ::core::option::Option<u64>,
+    #[prost(string, optional, tag = "2")]
+    pub message_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "3")]
+    pub message_content: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "4")]
+    pub error_message: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(bool, tag = "5")]
+    pub success: bool,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -38,7 +42,7 @@ pub struct AckMessageRequest {
     #[prost(string, tag = "1")]
     pub queue_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
-    pub message_uuid: ::prost::alloc::string::String,
+    pub id: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

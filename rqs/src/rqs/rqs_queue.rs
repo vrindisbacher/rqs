@@ -1,5 +1,5 @@
-use std::{io::Write, time::SystemTime, error::Error};
 use serde::{Deserialize, Serialize};
+use std::{io::Write, time::SystemTime};
 
 use crate::rqs::{LOG_ROOT, QUEUE_LOG};
 
@@ -7,7 +7,7 @@ use super::rqs_utils::exponential_backoff;
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct MessageLogLine {
-    pub id: u128,
+    pub id: u64,
     pub message_id: String,
     pub message_content: String,
     pub timestamp: u64,
@@ -19,7 +19,7 @@ pub struct RQSQueue {
     name: String,
     messages: Vec<MessageLogLine>,
     visibility_timeout: u32,
-    last_id: u128
+    last_id: u64,
 }
 
 impl RQSQueue {
@@ -28,7 +28,7 @@ impl RQSQueue {
             name,
             messages: Vec::new(),
             visibility_timeout,
-            last_id: 0
+            last_id: 0,
         }
     }
 
@@ -38,34 +38,37 @@ impl RQSQueue {
 
     pub async fn revive_from_log(&mut self) {
         let log_file = match std::fs::read_to_string(format!(
-                    "{LOG_ROOT}{QUEUE_LOG}{}/{}",
-                    self.name, "message.log"
-                )) {
-            Ok(s) => s, 
+            "{LOG_ROOT}{QUEUE_LOG}{}/{}",
+            self.name, "message.log"
+        )) {
+            Ok(s) => s,
             Err(_) => return,
         };
         for line in log_file.lines() {
-            let message : MessageLogLine = serde_json::from_str(&String::from(line)).expect("Corrupt mesage log file");
+            let message: MessageLogLine =
+                serde_json::from_str(&String::from(line)).expect("Corrupt mesage log file");
             self.last_id = message.id;
             self.messages.push(message);
         }
     }
 
     async fn write_log(&self) {
-        let mut file = exponential_backoff(|| 
-             std::fs::OpenOptions::new()
+        let mut file = exponential_backoff(|| {
+            std::fs::OpenOptions::new()
                 .create(true)
                 .write(true)
                 .open(format!(
                     "{LOG_ROOT}{QUEUE_LOG}{}/{}",
                     self.name, "message.log"
                 ))
-        ).await;
+        })
+        .await;
         for message in self.messages.iter() {
             file.write_fmt(format_args!(
                 "{}\n",
                 &serde_json::to_string(message).expect("Could not write log message to string")
-            )).expect("Could not write to file")
+            ))
+            .expect("Could not write to file")
         }
     }
 
@@ -88,17 +91,19 @@ impl RQSQueue {
         let now = exponential_backoff(|| SystemTime::now().duration_since(SystemTime::UNIX_EPOCH))
             .await
             .as_secs();
-        let idx = self.messages.iter_mut().position(|x| { 
-            if x.read_at.is_some() && x.read_at.unwrap() + self.visibility_timeout as u64 > now
+        let idx = self.messages.iter_mut().position(|x| {
+            if x.read_at.is_none()
+                || (x.read_at.is_some()
+                    && (now - x.read_at.unwrap()) >= self.visibility_timeout as u64)
             {
                 x.read_at = Some(now);
                 true
             } else {
                 false
             }
-        }); 
+        });
         match idx {
-            None => None, 
+            None => None,
             Some(idx) => {
                 self.write_log().await;
                 self.messages.get(idx)

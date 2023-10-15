@@ -23,14 +23,16 @@ message ConsumeMessageRequest {
 }
 
 message ConsumeMessageResponse {
-	string message_uuid = 1;
-	string message_id = 2;
-	string message_content = 3;
+	optional uint64 id = 1;
+	optional string message_id = 2;
+	optional string message_content = 3;
+	optional string error_message = 4; 
+	bool success = 5;
 }
 
 message AckMessageRequest {
 	string queue_id = 1;
-	string message_uuid = 2; 
+	string id = 2; 
 }
 
 message AckMessageResponse {

@@ -5,6 +5,7 @@ pub enum RQSError {
     FailedToCreateQueue(String),
     FailedToDeleteQueue(String),
     FailedToAddMessage(String),
+    FailedToGetMessage(String),
 }
 
 impl Display for RQSError {
@@ -13,6 +14,7 @@ impl Display for RQSError {
             RQSError::FailedToCreateQueue(s) => write!(f, "{}", s),
             RQSError::FailedToDeleteQueue(s) => write!(f, "{}", s),
             RQSError::FailedToAddMessage(s) => write!(f, "{}", s),
+            RQSError::FailedToGetMessage(s) => write!(f, "{}", s),
         }
     }
 }
@@ -21,14 +23,9 @@ impl Display for RQSError {
 pub enum RQSEvent {
     QueueCreated {
         queue_id: String,
-        visibility_timeout: u32
+        visibility_timeout: u32,
     },
     QueueDeleted {
         queue_id: String,
-    },
-    NewMessage {
-        queue_id: String,
-        message_id: String,
-        message_content: String,
     },
 }
