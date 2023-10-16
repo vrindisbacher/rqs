@@ -211,8 +211,14 @@ mod queue_client_server_test {
                 .consume_message(ConsumeMessageRequest {
                     queue_id: "queue_1".to_string(),
                 })
-                .await.expect("Could not consume messsage");
-            messages.push(message.into_inner().id.expect("Message ID not there and it should be"));
+                .await
+                .expect("Could not consume messsage");
+            messages.push(
+                message
+                    .into_inner()
+                    .id
+                    .expect("Message ID not there and it should be"),
+            );
         }
         assert_eq!(messages, (1..=10).collect::<Vec<u64>>());
     }

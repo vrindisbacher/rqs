@@ -400,7 +400,7 @@ mod rqs_test {
             .unwrap()
             .unwrap().id;
         rqs.ack_message("queue_1".to_string(), id).await.expect("could not ack message");
-        tokio::time::sleep(Duration::from_secs(vis_timeout as u64 + 1)).await;
+        tokio::time::sleep(Duration::from_secs(vis_timeout as u64)).await;
         assert!(rqs.get_message("queue_1".to_string()).await.unwrap().is_none());
     }
 }
